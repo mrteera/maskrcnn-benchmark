@@ -1,3 +1,5 @@
+import csv
+import json
 import logging
 import tempfile
 import os
@@ -5,6 +7,7 @@ import torch
 from collections import OrderedDict
 from tqdm import tqdm
 
+from maskrcnn_benchmark.config import cfg
 from maskrcnn_benchmark.modeling.roi_heads.mask_head.inference import Masker
 from maskrcnn_benchmark.structures.bounding_box import BoxList
 from maskrcnn_benchmark.structures.boxlist_ops import boxlist_iou
@@ -15,6 +18,7 @@ def do_coco_evaluation(
     predictions,
     box_only,
     output_folder,
+    output_csv,
     iou_types,
     expected_results,
     expected_results_sigma_tol,
@@ -38,29 +42,79 @@ def do_coco_evaluation(
             torch.save(res, os.path.join(output_folder, "box_proposals.pth"))
         return
     logger.info("Preparing results for COCO format")
-    coco_results = {}
-    if "bbox" in iou_types:
-        logger.info("Preparing bbox results")
-        coco_results["bbox"] = prepare_for_coco_detection(predictions, dataset)
-    if "segm" in iou_types:
-        logger.info("Preparing segm results")
-        coco_results["segm"] = prepare_for_coco_segmentation(predictions, dataset)
-    if 'keypoints' in iou_types:
-        logger.info('Preparing keypoints results')
-        coco_results['keypoints'] = prepare_for_coco_keypoint(predictions, dataset)
+    coco_results = {'all': {}, 'delamination': {}, 'rebar':{}}
+    categories = ['all', 'delamination', 'rebar']
+    for category in categories:
+        if "bbox" in iou_types:
+            logger.info("Preparing bbox results")
+            coco_results[category]["bbox"] = prepare_for_coco_detection(predictions, dataset)
+        if "segm" in iou_types:
+            logger.info("Preparing segm results")
+            coco_results[category]["segm"] = prepare_for_coco_segmentation(predictions, dataset)
+        if 'keypoints' in iou_types:
+            logger.info('Preparing keypoints results')
+            coco_results[category]['keypoints'] = prepare_for_coco_keypoint(predictions, dataset)
 
     results = COCOResults(*iou_types)
-    logger.info("Evaluating predictions")
-    for iou_type in iou_types:
-        with tempfile.NamedTemporaryFile() as f:
-            file_path = f.name
-            if output_folder:
-                file_path = os.path.join(output_folder, iou_type + ".json")
-            res = evaluate_predictions_on_coco(
-                dataset.coco, coco_results[iou_type], file_path, iou_type
+
+    for category in categories:
+        logger.info("Evaluating predictions")
+        for iou_type in iou_types:
+            with tempfile.NamedTemporaryFile() as f:
+                file_path = f.name
+                if output_folder:
+                    file_path = os.path.join(output_folder, iou_type + ".json")
+                res = evaluate_predictions_on_coco(
+                    dataset.coco, coco_results[category][iou_type], file_path, iou_type, category
+                )
+                results.update(res, category)
+    # Save accuracy to CSV
+    if output_csv == True:
+        csv_results = {}
+        csv_results['model_name'] = '/'.join(cfg.MODEL.WEIGHT.split('/')[-2:])
+        csv_results['dataset_name'] = cfg.DATASETS.TEST[0]
+
+        for category in categories:
+            logger.info(results.get_dict())
+            csv_results['bbox_AP_{}'.format(category)] = results.get_dict()[category]['bbox']['AP']
+            csv_results['bbox_AP50_{}'.format(category)] = results.get_dict()[category]['bbox']['AP50']
+            csv_results['bbox_AP75_{}'.format(category)] = results.get_dict()[category]['bbox']['AP75']
+            csv_results['bbox_APs_{}'.format(category)] = results.get_dict()[category]['bbox']['APs']
+            csv_results['bbox_APm_{}'.format(category)] = results.get_dict()[category]['bbox']['APm']
+            csv_results['bbox_APl_{}'.format(category)] = results.get_dict()[category]['bbox']['APl']
+            csv_results['segm_AP_{}'.format(category)] = results.get_dict()[category]['segm']['AP']
+            csv_results['segm_AP50_{}'.format(category)] = results.get_dict()[category]['segm']['AP50']
+            csv_results['segm_AP75_{}'.format(category)] = results.get_dict()[category]['segm']['AP75']
+            csv_results['segm_APs_{}'.format(category)] = results.get_dict()[category]['segm']['APs']
+            csv_results['segm_APm_{}'.format(category)] = results.get_dict()[category]['segm']['APm']
+            csv_results['segm_APl_{}'.format(category)] = results.get_dict()[category]['segm']['APl']
+            csv_results['bbox_AR1_{}'.format(category)] = results.get_dict()[category]['bbox']['AR1']
+            csv_results['bbox_AR10_{}'.format(category)] = results.get_dict()[category]['bbox']['AR10']
+            csv_results['bbox_AR100_{}'.format(category)] = results.get_dict()[category]['bbox']['AR100']
+            csv_results['bbox_ARs_{}'.format(category)] = results.get_dict()[category]['bbox']['ARs']
+            csv_results['bbox_ARm_{}'.format(category)] = results.get_dict()[category]['bbox']['ARm']
+            csv_results['bbox_ARl_{}'.format(category)] = results.get_dict()[category]['bbox']['ARl']
+            csv_results['segm_AR1_{}'.format(category)] = results.get_dict()[category]['segm']['AR1']
+            csv_results['segm_AR10_{}'.format(category)] = results.get_dict()[category]['segm']['AR10']
+            csv_results['segm_AR100_{}'.format(category)] = results.get_dict()[category]['segm']['AR100']
+            csv_results['segm_ARs_{}'.format(category)] = results.get_dict()[category]['segm']['ARs']
+            csv_results['segm_ARm_{}'.format(category)] = results.get_dict()[category]['segm']['ARm']
+            csv_results['segm_ARl_{}'.format(category)] = results.get_dict()[category]['segm']['ARl']
+
+        csv_filename = '/maskrcnn-benchmark-latest/reports/{}.csv'.format(csv_results['model_name'].split('/')[0])
+        csv_exists = os.path.isfile(csv_filename)
+        with open(csv_filename, 'a') as f:
+            w = csv.DictWriter(
+                f,
+                fieldnames=sorted(list(csv_results.keys()))
             )
-            results.update(res)
-    logger.info(results)
+            if not csv_exists:
+                w.writeheader()
+            w.writerow(csv_results)
+        logger.info(csv_results)
+    else:
+        logger.info(results)
+
     check_expected_results(results, expected_results, expected_results_sigma_tol)
     if output_folder:
         torch.save(results, os.path.join(output_folder, "coco_results.pth"))
@@ -303,7 +357,7 @@ def evaluate_box_proposals(
 
 
 def evaluate_predictions_on_coco(
-    coco_gt, coco_results, json_result_file, iou_type="bbox"
+    coco_gt, coco_results, json_result_file, iou_type="bbox", category='all'
 ):
     import json
 
@@ -317,6 +371,14 @@ def evaluate_predictions_on_coco(
 
     # coco_dt = coco_gt.loadRes(coco_results)
     coco_eval = COCOeval(coco_gt, coco_dt, iou_type)
+    import numpy as np
+    coco_eval.params.iouThrs = np.array([0.5])
+    if category == 'all':
+        coco_eval.params.catIds = [1, 2]
+    elif category == 'rebar':
+        coco_eval.params.catIds = [2]
+    elif category == 'delamination':
+        coco_eval.params.catIds = [1]
     coco_eval.evaluate()
     coco_eval.accumulate()
     coco_eval.summarize()
@@ -324,9 +386,9 @@ def evaluate_predictions_on_coco(
 
 
 class COCOResults(object):
-    METRICS = {
-        "bbox": ["AP", "AP50", "AP75", "APs", "APm", "APl"],
-        "segm": ["AP", "AP50", "AP75", "APs", "APm", "APl"],
+    METRICS_ALL = {
+        "bbox": ["AP", "AP50", "AP75", "APs", "APm", "APl", "AR1", "AR10", "AR100", "ARs", "ARm", "ARl"],
+        "segm": ["AP", "AP50", "AP75", "APs", "APm", "APl", "AR1", "AR10", "AR100", "ARs", "ARm", "ARl"],
         "box_proposal": [
             "AR@100",
             "ARs@100",
@@ -340,17 +402,64 @@ class COCOResults(object):
         "keypoints": ["AP", "AP50", "AP75", "APm", "APl"],
     }
 
+    METRICS_DELAMINATION = {
+        "bbox": ["AP", "AP50", "AP75", "APs", "APm", "APl", "AR1", "AR10", "AR100", "ARs", "ARm", "ARl"],
+        "segm": ["AP", "AP50", "AP75", "APs", "APm", "APl", "AR1", "AR10", "AR100", "ARs", "ARm", "ARl"],
+        "box_proposal": [
+            "AR@100",
+            "ARs@100",
+            "ARm@100",
+            "ARl@100",
+            "AR@1000",
+            "ARs@1000",
+            "ARm@1000",
+            "ARl@1000",
+        ],
+        "keypoints": ["AP", "AP50", "AP75", "APm", "APl"],
+    }
+
+    METRICS_REBAR = {
+        "bbox": ["AP", "AP50", "AP75", "APs", "APm", "APl", "AR1", "AR10", "AR100", "ARs", "ARm", "ARl"],
+        "segm": ["AP", "AP50", "AP75", "APs", "APm", "APl", "AR1", "AR10", "AR100", "ARs", "ARm", "ARl"],
+        "box_proposal": [
+            "AR@100",
+            "ARs@100",
+            "ARm@100",
+            "ARl@100",
+            "AR@1000",
+            "ARs@1000",
+            "ARm@1000",
+            "ARl@1000",
+        ],
+        "keypoints": ["AP", "AP50", "AP75", "APm", "APl"],
+    }
+
+    METRICS = {
+        "all": METRICS_ALL,
+        "delamination": METRICS_DELAMINATION,
+        "rebar": METRICS_REBAR,
+    }
+
+
     def __init__(self, *iou_types):
         allowed_types = ("box_proposal", "bbox", "segm", "keypoints")
         assert all(iou_type in allowed_types for iou_type in iou_types)
         results = OrderedDict()
-        for iou_type in iou_types:
-            results[iou_type] = OrderedDict(
-                [(metric, -1) for metric in COCOResults.METRICS[iou_type]]
-            )
+        categories = ['all', 'delamination', 'rebar']
+        for category in categories:
+            if category == 'all':
+                results[category] = COCOResults.METRICS_ALL
+            elif category == 'delamination':
+                results[category] = COCOResults.METRICS_DELAMINATION
+            elif category == 'rebar':
+                results[category] = COCOResults.METRICS_REBAR
+            for iou_type in iou_types:
+                results[category][iou_type] = OrderedDict(
+                    [(metric, -1) for metric in COCOResults.METRICS[category][iou_type]]
+                )
         self.results = results
 
-    def update(self, coco_eval):
+    def update(self, coco_eval, category):
         if coco_eval is None:
             return
         from pycocotools.cocoeval import COCOeval
@@ -358,14 +467,18 @@ class COCOResults(object):
         assert isinstance(coco_eval, COCOeval)
         s = coco_eval.stats
         iou_type = coco_eval.params.iouType
-        res = self.results[iou_type]
-        metrics = COCOResults.METRICS[iou_type]
+        # res = self.results[category][iou_type]
+        res = self.results
+        metrics = COCOResults.METRICS[category][iou_type]
         for idx, metric in enumerate(metrics):
-            res[metric] = s[idx]
+            res[category][iou_type][metric] = s[idx]
 
     def __repr__(self):
         # TODO make it pretty
         return repr(self.results)
+
+    def get_dict(self):
+        return self.results
 
 
 def check_expected_results(results, expected_results, sigma_tol):

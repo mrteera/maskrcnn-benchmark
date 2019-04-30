@@ -66,6 +66,7 @@ def inference(
         expected_results=(),
         expected_results_sigma_tol=4,
         output_folder=None,
+        output_csv=None,
 ):
     # convert to a torch.device for efficiency
     device = torch.device(device)
@@ -112,4 +113,5 @@ def inference(
     return evaluate(dataset=dataset,
                     predictions=predictions,
                     output_folder=output_folder,
+                    output_csv=output_csv,
                     **extra_args)

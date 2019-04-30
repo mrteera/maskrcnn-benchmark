@@ -103,7 +103,27 @@ class DatasetCatalog(object):
         "cityscapes_fine_instanceonly_seg_test_cocostyle": {
             "img_dir": "cityscapes/images",
             "ann_file": "cityscapes/annotations/instancesonly_filtered_gtFine_test.json"
-        }
+        },
+        "dental_2018_train_cocostyle": {
+            "img_dir": "periodontitis/train",
+            "ann_file": "periodontitis/train/annotations/train_annotations.json"
+        },
+        "dental_2018_val_cocostyle": {
+            "img_dir": "periodontitis/val",
+            "ann_file": "periodontitis/val/annotations/val_annotations.json"
+        },
+        "niibridge_2018_train_cocostyle": {
+            "img_dir": "niibridge/new_dataset/bridge_2018",
+            "ann_file": "niibridge/new_dataset/instances_bridge_train2018v4.json"
+        },
+        "niibridge_2018_val_cocostyle": {
+            "img_dir": "niibridge/val/bridge_val2018",
+            "ann_file": "niibridge/val/instances_bridge_val2018.json"
+        },
+        "niibridge_2018_test_cocostyle": {
+            "img_dir": "niibridge/new_dataset/bridge_2018",
+            "ann_file": "niibridge/new_dataset/instances_bridge_test2018v4.json"
+        },
     }
 
     @staticmethod
