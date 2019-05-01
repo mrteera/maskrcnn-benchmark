@@ -39,6 +39,7 @@ RUN conda install pytorch-nightly cudatoolkit=${CUDA} -c pytorch \
 # Install TorchVision master
 RUN git clone https://github.com/pytorch/vision.git \
  && cd vision \
+ && git checkout 98ca260bc834ec94a8143e4b5cfe9516b0b951a2 \
  && python setup.py install
 
 # install pycocotools
