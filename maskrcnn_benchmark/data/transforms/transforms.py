@@ -5,6 +5,10 @@ import torch
 import torchvision
 from torchvision.transforms import functional as F
 
+import numpy as np
+from imgaug import augmenters as iaa
+from PIL import Image
+
 
 class Compose(object):
     def __init__(self, transforms):
@@ -87,6 +91,17 @@ class ColorJitter(object):
 
     def __call__(self, image, target):
         image = self.color_jitter(image)
+        return image, target
+
+
+class HistogramEqualization(object):
+    def __init__(self):
+        self.histogram_equalization = iaa.contrast.AllChannelsHistogramEqualization()
+
+    def __call__(self, image, target):
+        image = np.array(image)
+        image = self.histogram_equalization.augment_image(image)
+        image = Image.fromarray(np.uint8(image))
         return image, target
 
 

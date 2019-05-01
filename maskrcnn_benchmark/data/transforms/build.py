@@ -24,6 +24,9 @@ def build_transforms(cfg, is_train=True):
     normalize_transform = T.Normalize(
         mean=cfg.INPUT.PIXEL_MEAN, std=cfg.INPUT.PIXEL_STD, to_bgr255=to_bgr255
     )
+
+    histogram_equalization = T.HistogramEqualization()
+
     color_jitter = T.ColorJitter(
         brightness=brightness,
         contrast=contrast,
@@ -33,6 +36,7 @@ def build_transforms(cfg, is_train=True):
 
     transform = T.Compose(
         [
+            histogram_equalization,
             color_jitter,
             T.Resize(min_size, max_size),
             T.RandomHorizontalFlip(flip_prob),
