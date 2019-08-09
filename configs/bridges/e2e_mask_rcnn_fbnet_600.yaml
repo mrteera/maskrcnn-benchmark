@@ -55,3 +55,4 @@ INPUT:
   CONTRAST: 0.0
   SATURATION: 0.0
   HUE: 0.0
+OUTPUT_DIR: /storage/
