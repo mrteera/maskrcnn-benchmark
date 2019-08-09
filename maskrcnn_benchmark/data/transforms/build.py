@@ -38,7 +38,6 @@ def build_transforms(cfg, is_train=True):
 
     transform = T.Compose(
         [
-            histogram_equalization,
             color_jitter,
             T.Resize(min_size, max_size),
             T.RandomHorizontalFlip(flip_horizontal_prob),
